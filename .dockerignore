@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+.swarm/
+.broker/
+.claude/
+.claude-flow/
+.ruflo/
+.git/
+__pycache__/
+*.pyc
+tests/
+docs/
+node_modules/
