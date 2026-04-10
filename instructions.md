@@ -2,7 +2,7 @@
 
 # Continuation Instructions
 
-_Last updated: 2026-04-10 (Supermemory live test, Bearer auth, 30 tests). Read this file completely before touching anything._
+_Last updated: 2026-04-10 (Supermemory full round-trip proven, auth, logging, 30 tests). Read this file completely before touching anything._
 
 ---
 
@@ -72,8 +72,9 @@ A swarm with 2 agents (agent-reviewer, agent-planner) ran successfully:
 
 ### Supermemory
 - Adapter at `broker/adapters/supermemory.py` is **real code** (urllib + Supermemory REST API v3).
+- **Live and proven**: write (POST /v3/documents) + search (POST /v3/search) both return 200.
 - Graceful degradation: works as a no-op when `SUPERMEMORY_API_KEY` is not set.
-- Canonical long-term memory target; needs API key in `SUPERMEMORY_API_KEY` env var to go live.
+- API key configured in `.env` (not committed).
 - Do not bypass the broker layer — all writes must go through `engine.py`.
 
 ---
@@ -96,24 +97,18 @@ A swarm with 2 agents (agent-reviewer, agent-planner) ran successfully:
 - ✅ Supermemory adapter: real urllib REST implementation (v3 API), graceful NO_KEY degradation
 - ✅ HTTP server (`broker/server.py`): /capture, /retrieve, /explain, /upsert, /cache, /health; CORS; CLI `python -m broker serve`
 - ✅ Automated tests: 17 unit tests + 13 HTTP tests (30 total)
-- ✅ Supermemory live write proof: POST /v3/documents succeeded with real API key (doc ID returned)
-- ✅ Supermemory search: 401 with current key (key may need search permissions from console.supermemory.ai)
+- ✅ Supermemory full round-trip proven: write (POST /v3/documents) + search (POST /v3/search) + chunk parsing
 - ✅ Bearer auth on HTTP server: `BROKER_API_KEY` env var, /health stays public
+- ✅ Structured request logging (method, path, status, duration, client IP)
 
 ---
 
 ## Pending Work (priority order)
 
-### 1. Supermemory search fix
-- Write works (POST /v3/documents → 200), search returns 401.
-- Likely the API key needs search/read permissions — regenerate from console.supermemory.ai or check plan limits.
-- Once search works, full round-trip is proven.
-
-### 2. Request logging and rate limiting
-- HTTP server has auth but no request logging middleware or rate limiting.
-- Add structured request log (method, path, status, duration).
+### 1. Rate limiting and metrics
+- HTTP server has auth + logging but no rate limiting.
 - Add basic rate limiting (per-IP or global) before VPS deployment.
-- Consider `/metrics` endpoint.
+- Add `/metrics` endpoint for monitoring.
 
 ### 3. Integration tightening
 - Wire broker HTTP endpoints into Claude Code as a custom tool or MCP resource.
@@ -123,7 +118,7 @@ A swarm with 2 agents (agent-reviewer, agent-planner) ran successfully:
 ---
 
 ## Required First Task For The Next Agent
-1. Check if Supermemory search (POST /v3/search) is still returning 401 — if so, the API key needs to be regenerated from console.supermemory.ai with read permissions.
+1. Code review of all workspace files, report findings by severity.
 2. Proceed with the pending work listed above, in priority order.
 3. Report what you did and what remains before finishing.
 
