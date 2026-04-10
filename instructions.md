@@ -2,7 +2,7 @@
 
 # Continuation Instructions
 
-_Last updated: 2026-04-10 (Supermemory full round-trip proven, auth, logging, 30 tests). Read this file completely before touching anything._
+_Last updated: 2026-04-10 (hook bridge, rate limiting, metrics, 38 tests). Read this file completely before touching anything._
 
 ---
 
@@ -39,6 +39,7 @@ tests/                         ← unittest round-trip tests (17 tests, all pass
 | `adapters/local_cache.py` | **REAL** | flat-file JSON backend under `.broker/cache/`; one file per scope |
 | `server.py` | **REAL** | HTTP server (http.server); endpoints: /capture, /retrieve, /explain, /upsert, /cache, /health; CORS; default 127.0.0.1:8081 |
 | `adapters/supermemory.py` | **REAL** | urllib-based REST adapter for Supermemory API v3; POST /v3/documents + POST /v3/search; graceful NO_KEY degradation |
+| `hooks.py` | **REAL** | Ruflo hook bridge: post-task, post-edit, session events → broker /capture; CLI + library API |
 
 ### Documentation (`docs/`)
 | File | Content |
@@ -100,20 +101,28 @@ A swarm with 2 agents (agent-reviewer, agent-planner) ran successfully:
 - ✅ Supermemory full round-trip proven: write (POST /v3/documents) + search (POST /v3/search) + chunk parsing
 - ✅ Bearer auth on HTTP server: `BROKER_API_KEY` env var, /health stays public
 - ✅ Structured request logging (method, path, status, duration, client IP)
+- ✅ Per-IP rate limiting (BROKER_RATE_LIMIT, BROKER_RATE_WINDOW env vars)
+- ✅ `/metrics` endpoint (request counters, uptime, rate-limit hits)
+- ✅ Ruflo hook bridge (`broker/hooks.py`): post-task, post-edit, session → broker /capture
+- ✅ Ruflo MCP memory: broker config + architecture stored in `broker` namespace
+- ✅ 38 tests total (17 unit + 15 HTTP + 6 hooks), all passing
 
 ---
 
 ## Pending Work (priority order)
 
-### 1. Rate limiting and metrics
-- HTTP server has auth + logging but no rate limiting.
-- Add basic rate limiting (per-IP or global) before VPS deployment.
-- Add `/metrics` endpoint for monitoring.
+### 1. Multi-workspace isolation testing
+- Test container tags isolation with 2+ workspaces writing to the same Supermemory org.
+- Verify that retrieve scoped by workspace_id returns only matching records.
 
-### 3. Integration tightening
-- Wire broker HTTP endpoints into Claude Code as a custom tool or MCP resource.
-- Explore Ruflo hooks (`hooks_post-task`, `hooks_post-edit`) to auto-capture events to the broker.
-- Test multi-workspace isolation via container tags.
+### 2. VPS deployment
+- Dockerize the broker server for deployment.
+- Document systemd/PM2 service configuration.
+- Configure BROKER_API_KEY for production auth.
+
+### 3. Claude Code custom tool / MCP resource
+- Register broker endpoints as MCP resources so Claude Code can query memory inline.
+- Explore using Ruflo `hooks_init` to wire broker hooks into `.claude/settings.json` automatically.
 
 ---
 
