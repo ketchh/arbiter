@@ -56,7 +56,31 @@ The broker exposes a local HTTP API:
 | `POST` | `/explain` | Preview retrieval without fetching |
 | `POST` | `/upsert` | Direct memory record upsert |
 | `DELETE` | `/cache` | Flush local cache |
-| `GET` | `/health` | Liveness check |
+| `GET` | `/health` | Liveness check (no auth required) |
+| `GET` | `/metrics` | Request counters and uptime |
+
+### Authentication
+
+Set `BROKER_API_KEY` in `.env` to require Bearer token auth on all endpoints except `/health`:
+
+```bash
+# In .env
+BROKER_API_KEY=your-secret-key
+
+# In requests
+curl -H "Authorization: Bearer your-secret-key" http://127.0.0.1:8081/capture ...
+```
+
+When `BROKER_API_KEY` is not set, the server runs in open mode (suitable for local use).
+
+### Rate Limiting
+
+Per-IP sliding-window rate limiting is enabled by default (60 requests per 60 seconds). Configure via:
+
+```bash
+BROKER_RATE_LIMIT=60   # max requests per window (0 = disabled)
+BROKER_RATE_WINDOW=60  # window in seconds
+```
 
 ### Example: capture an event
 
@@ -108,10 +132,15 @@ The write policy decides which backends receive each write based on scope and im
 ## Tests
 
 ```bash
-python -m unittest tests.test_broker_roundtrip -v
+python -m unittest discover tests -v
 ```
 
-17 tests covering normalization, policy routing, round-trips against local cache and Ruflo sqlite, Supermemory graceful degradation, and dry-run behavior.
+32 tests covering:
+- Event normalization, clamping, policy routing
+- Local cache and Ruflo sqlite round-trips
+- Supermemory graceful degradation (no key) and live API integration
+- HTTP server endpoints, CORS, auth enforcement
+- Rate limiting and metrics
 
 ## Project Structure
 
@@ -128,7 +157,8 @@ broker/
     ruflo.py           Ruflo sqlite3 adapter
     local_cache.py     Flat-file JSON backend
 tests/
-  test_broker_roundtrip.py
+  test_broker_roundtrip.py   17 unit tests
+  test_server_http.py        15 HTTP integration tests
 docs/
   memory-broker.md     Architecture and policy reference
   setup-minimo.md      Setup guide
