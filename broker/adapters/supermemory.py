@@ -222,19 +222,25 @@ class SupermemoryBackend:
             if not isinstance(item, dict):
                 continue
             metadata = item.get("metadata", {})
-            # Content can be in different fields depending on response shape
-            content = (
-                item.get("content")
-                or item.get("chunk")
-                or item.get("text")
-                or item.get("summary")
-                or ""
-            )
+
+            # v3/search returns content inside chunks[].content
+            chunks = item.get("chunks", [])
+            if chunks and isinstance(chunks[0], dict):
+                content = chunks[0].get("content", "")
+            else:
+                content = (
+                    item.get("content")
+                    or item.get("text")
+                    or item.get("summary")
+                    or ""
+                )
+
             records.append({
-                "id": metadata.get("broker_id", item.get("id", item.get("customId", ""))),
+                "id": metadata.get("broker_id", item.get("documentId", item.get("id", ""))),
                 "event_id": metadata.get("broker_event_id", ""),
                 "scope": metadata.get("scope", scope_val),
                 "memory_type": metadata.get("memory_type", "fact"),
+                "title": item.get("title", ""),
                 "content": content,
                 "confidence": metadata.get("confidence", 0.5),
                 "importance": metadata.get("importance", 0.5),
