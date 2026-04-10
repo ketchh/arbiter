@@ -149,12 +149,13 @@ The write policy decides which backends receive each write based on scope and im
 python -m unittest discover tests -v
 ```
 
-32 tests covering:
+38 tests covering (17 unit + 15 HTTP + 6 hooks):
 - Event normalization, clamping, policy routing
 - Local cache and Ruflo sqlite round-trips
 - Supermemory graceful degradation (no key) and live API integration
 - HTTP server endpoints, CORS, auth enforcement
 - Rate limiting and metrics
+- Ruflo hook bridge (post-task, post-edit, session events)
 
 ## Project Structure
 

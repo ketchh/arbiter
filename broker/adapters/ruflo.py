@@ -47,12 +47,14 @@ class RufloBackend:
     # -- internal helpers --------------------------------------------------
 
     def _ensure_db(self) -> None:
-        """Verify the DB and memory_entries table exist."""
+        """Verify the DB and memory_entries table exist; set WAL mode once."""
         if not self.db_path.is_file():
             log.warning("[ruflo] DB not found at %s — creating empty DB", self.db_path)
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = self._connect()
         try:
+            # WAL mode persists once set — only needs to run at init time.
+            conn.execute("PRAGMA journal_mode = WAL")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS memory_entries (
@@ -84,7 +86,7 @@ class RufloBackend:
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self.db_path))
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode = WAL")
+        # foreign_keys is per-connection in SQLite — must be set every time.
         conn.execute("PRAGMA foreign_keys = ON")
         return conn
 
@@ -173,55 +175,75 @@ class RufloBackend:
         user_id: str,
         workspace_id: str,
         limit: int = 10,
+        query: str = "",
     ) -> list[dict[str, Any]]:
         """Retrieve broker-written records from memory_entries, filtered by scope.
 
         Returns parsed MemoryRecord dicts sorted by importance desc, then updated_at desc.
+        Filtering by user_id, workspace_id, and optional query is done at the SQL level.
         """
         namespace = scope.value if isinstance(scope, MemoryScope) else scope
 
         conn = self._connect()
         try:
-            # Filter: namespace matches scope, status is active,
-            # and the key starts with "broker:" to avoid reading non-broker entries.
-            rows = conn.execute(
-                """
+            # Build WHERE clause dynamically based on provided filters.
+            clauses = [
+                "namespace = :ns",
+                "status = 'active'",
+                "key LIKE 'broker:%'",
+            ]
+            params: dict[str, Any] = {"ns": namespace, "lim": limit}
+
+            if user_id:
+                clauses.append("owner_id = :owner_id")
+                params["owner_id"] = user_id
+
+            if workspace_id:
+                clauses.append("tags LIKE :ws_pattern")
+                params["ws_pattern"] = f'%"workspace:{workspace_id}"%'
+
+            if query:
+                # Split query into words; each word must appear in the content.
+                for i, word in enumerate(query.split()):
+                    if word:
+                        param_key = f"qw{i}"
+                        clauses.append(f"content LIKE :{param_key}")
+                        params[param_key] = f"%{word}%"
+
+            where = " AND ".join(clauses)
+            sql = f"""
                 SELECT id, key, content, metadata, updated_at, access_count
                 FROM memory_entries
-                WHERE namespace = :ns
-                  AND status = 'active'
-                  AND key LIKE 'broker:%'
+                WHERE {where}
                 ORDER BY
                     json_extract(metadata, '$.importance') DESC,
                     updated_at DESC
                 LIMIT :lim
-                """,
-                {"ns": namespace, "lim": limit},
-            ).fetchall()
+            """
+
+            rows = conn.execute(sql, params).fetchall()
 
             results: list[dict[str, Any]] = []
+            row_ids: list[str] = []
             for row in rows:
                 try:
                     record_dict = json.loads(row["content"])
                 except (json.JSONDecodeError, TypeError):
                     continue
-
-                # Filter by user and workspace if the record has them
-                if user_id and record_dict.get("user_id") and record_dict["user_id"] != user_id:
-                    continue
-                if workspace_id and record_dict.get("workspace_id") and record_dict["workspace_id"] != workspace_id:
-                    continue
-
                 results.append(record_dict)
+                row_ids.append(row["id"])
 
-                # Update access tracking
+            # Batch-update access tracking for all returned rows in one statement.
+            if row_ids:
+                placeholders = ",".join("?" for _ in row_ids)
+                now = self._now_ms()
                 conn.execute(
-                    """
+                    f"""
                     UPDATE memory_entries
-                    SET last_accessed_at = :now, access_count = access_count + 1
-                    WHERE id = :id
+                    SET last_accessed_at = ?, access_count = access_count + 1
+                    WHERE id IN ({placeholders})
                     """,
-                    {"now": self._now_ms(), "id": row["id"]},
+                    [now] + row_ids,
                 )
 
             conn.commit()

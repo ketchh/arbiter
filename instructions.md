@@ -2,7 +2,7 @@
 
 # Continuation Instructions
 
-_Last updated: 2026-04-10 (pip-installable, CLI, Dockerfile, 38 tests). Read this file completely before touching anything._
+_Last updated: 2026-04-10 (code review + 17 fixes via SPARC swarm, 38 tests passing). Read this file completely before touching anything._
 
 ---
 
@@ -48,6 +48,7 @@ tests/                         ← unittest round-trip tests (17 tests, all pass
 |------|---------|
 | `memory-broker.md` | full architecture + "Current Practical Role" section |
 | `topologia-server.md` | server topology |
+| `code-review.md` | detailed code review (20 findings, 17 fixed) |
 
 ---
 
@@ -111,6 +112,22 @@ A swarm with 2 agents (agent-reviewer, agent-planner) ran successfully:
 - ✅ pip-installable (`pip install -e .` → `arbiter` CLI command)
 - ✅ CLI: serve, dry-run, capture, retrieve, status
 - ✅ Dockerfile for container/VPS deployment
+- ✅ Code review: 20 findings documented in `docs/code-review.md` (3 HIGH, 9 MEDIUM, 6 LOW, 2 INFO)
+- ✅ SEC-01: HTTP body size limit (`BROKER_MAX_BODY_SIZE` env var, default 1MB, returns 413)
+- ✅ SEC-02: `/upsert` now validates confidence/importance with `clamp_unit()`
+- ✅ SEC-03: CORS origin configurable via `BROKER_CORS_ORIGIN` env var
+- ✅ BUG-01: Metrics status tracking now uses actual handler return codes
+- ✅ BUG-02: Query parameter propagated to all backends (supermemory search, ruflo SQL LIKE, local_cache substring)
+- ✅ BUG-03: `body.get()` replaces `body.pop()` in `_handle_capture` (no input mutation)
+- ✅ BUG-04: Invalid scope/memory_type now returns 400 with detail instead of 500
+- ✅ BUG-05: Removed redundant `--success` flag from hooks CLI (was always True)
+- ✅ PERF-01: `PRAGMA journal_mode=WAL` moved to `_ensure_db()` (runs once, not per-connection)
+- ✅ PERF-02: Ruflo retrieve uses SQL-level user/workspace filtering + batched access_count UPDATE
+- ✅ ARCH-02: `upsert_memory()` synthetic event now includes confidence, memory_type, subject
+- ✅ ARCH-03: `clamp_unit()` uses module-level logger instead of lazy import
+- ✅ DOC-01: README test count updated to 38
+- ✅ All handlers return status codes for accurate metrics tracking
+- ✅ 38 tests still passing after all fixes
 
 ---
 

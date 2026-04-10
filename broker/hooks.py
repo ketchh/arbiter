@@ -145,14 +145,12 @@ def main() -> None:
     pt = sub.add_parser("post-task", help="Capture a completed task")
     pt.add_argument("--task-id", required=True)
     pt.add_argument("--task", default="")
-    pt.add_argument("--success", action="store_true", default=True)
     pt.add_argument("--failed", action="store_true")
     pt.add_argument("--quality", type=float, default=0.5)
     pt.add_argument("--agent", default="claude-code")
 
     pe = sub.add_parser("post-edit", help="Capture a file edit")
     pe.add_argument("--file", required=True)
-    pe.add_argument("--success", action="store_true", default=True)
     pe.add_argument("--failed", action="store_true")
     pe.add_argument("--agent", default="claude-code")
 

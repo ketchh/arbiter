@@ -60,14 +60,29 @@ class LocalCacheBackend:
         user_id: str,
         workspace_id: str,
         limit: int = 10,
+        query: str = "",
     ) -> list[dict[str, Any]]:
-        """Retrieve records for a given scope, filtered by user+workspace."""
+        """Retrieve records for a given scope, filtered by user+workspace.
+
+        When *query* is provided, only records whose ``content`` or ``subject``
+        contain the query string (case-insensitive) are returned.
+        """
         records = self._read_scope(scope)
         matched = [
             r for r in records
             if r.get("user_id") == user_id
             and r.get("workspace_id") == workspace_id
         ]
+
+        # Optional text-search filter
+        if query:
+            q_lower = query.lower()
+            matched = [
+                r for r in matched
+                if q_lower in str(r.get("content", "")).lower()
+                or q_lower in str(r.get("subject", "")).lower()
+            ]
+
         # Sort by importance descending, then by created_at descending
         matched.sort(
             key=lambda r: (r.get("importance", 0), r.get("created_at", "")),

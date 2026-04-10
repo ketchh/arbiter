@@ -106,6 +106,9 @@ class BrokerEngine:
         event = BrokerEvent(
             scope=record.scope,
             importance=record.importance,
+            confidence=record.confidence,
+            memory_type=record.memory_type,
+            subject=record.subject,
         )
         decision = evaluate_write(event, self.config)
         results: dict[str, Any] = {}
@@ -136,6 +139,7 @@ class BrokerEngine:
                     user_id=self.config.user_id,
                     workspace_id=self.config.workspace_id,
                     limit=limit,
+                    query=query,
                 )
                 if records:
                     results.append(RetrievalResult(

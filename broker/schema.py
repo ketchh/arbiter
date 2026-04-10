@@ -7,6 +7,9 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
+import logging
+
+log = logging.getLogger(__name__)
 
 
 class MemoryScope(str, Enum):
@@ -118,8 +121,7 @@ def clamp_unit(value: float, field_name: str) -> float:
     """Clamp a float to [0.0, 1.0] and warn on out-of-range input."""
     clamped = max(0.0, min(1.0, value))
     if clamped != value:
-        import logging
-        logging.getLogger(__name__).warning(
+        log.warning(
             "%s=%.4f out of [0,1], clamped to %.4f", field_name, value, clamped,
         )
     return clamped

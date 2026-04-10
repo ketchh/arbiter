@@ -174,6 +174,7 @@ class SupermemoryBackend:
         user_id: str,
         workspace_id: str,
         limit: int = 10,
+        query: str = "",
     ) -> list[dict[str, Any]]:
         """Search Supermemory for broker-written records in a given scope."""
         if not self._connected:
@@ -184,7 +185,7 @@ class SupermemoryBackend:
         container_tag = self._container_tag_for_scope(scope_val, workspace_id)
 
         body: dict[str, Any] = {
-            "q": f"scope:{scope_val}",
+            "q": query if query else f"scope:{scope_val}",
             "containerTags": [container_tag],
         }
 

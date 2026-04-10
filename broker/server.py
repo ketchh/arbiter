@@ -42,6 +42,12 @@ _API_KEY = os.environ.get("BROKER_API_KEY", "")
 _RATE_LIMIT = int(os.environ.get("BROKER_RATE_LIMIT", "60"))  # per window
 _RATE_WINDOW = int(os.environ.get("BROKER_RATE_WINDOW", "60"))  # seconds
 
+# Maximum allowed request body size (bytes); rejects with 413 if exceeded
+_MAX_BODY_SIZE = int(os.environ.get("BROKER_MAX_BODY_SIZE", "1048576"))  # 1 MB default
+
+# CORS origin header; default "*" allows all origins
+_CORS_ORIGIN = os.environ.get("BROKER_CORS_ORIGIN", "*")
+
 
 class _RateLimiter:
     """Simple in-memory per-IP sliding-window rate limiter."""
@@ -101,17 +107,19 @@ _metrics = _Metrics()
 def _json_response(handler: "BrokerHandler", status: int, body: Any) -> None:
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")
-    handler.send_header("Access-Control-Allow-Origin", "*")
+    handler.send_header("Access-Control-Allow-Origin", _CORS_ORIGIN)
     handler.end_headers()
     handler.wfile.write(
         json.dumps(body, indent=2, ensure_ascii=False, default=str).encode("utf-8")
     )
 
 
-def _read_json_body(handler: "BrokerHandler") -> dict[str, Any]:
+def _read_json_body(handler: "BrokerHandler") -> dict[str, Any] | None:
     length = int(handler.headers.get("Content-Length", 0))
     if length == 0:
         return {}
+    if length > _MAX_BODY_SIZE:
+        return None
     raw = handler.rfile.read(length)
     return json.loads(raw.decode("utf-8"))
 
@@ -156,7 +164,7 @@ class BrokerHandler(BaseHTTPRequestHandler):
 
     def do_OPTIONS(self) -> None:
         self.send_response(204)
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Origin", _CORS_ORIGIN)
         self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
         self.end_headers()
@@ -200,23 +208,32 @@ class BrokerHandler(BaseHTTPRequestHandler):
             return
         try:
             body = _read_json_body(self)
+            if body is None:
+                _json_response(self, 413, {"error": "payload too large", "max_bytes": _MAX_BODY_SIZE})
+                _metrics.record(self.path, 413)
+                self._log_request(413, t0)
+                return
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             _json_response(self, 400, {"error": "invalid JSON", "detail": str(exc)})
             _metrics.record(self.path, 400)
             self._log_request(400, t0)
             return
 
-        if self.path == "/capture":
-            self._handle_capture(body)
-        elif self.path == "/retrieve":
-            self._handle_retrieve(body)
-        elif self.path == "/explain":
-            self._handle_explain(body)
-        elif self.path == "/upsert":
-            self._handle_upsert(body)
-        else:
-            _json_response(self, 404, {"error": "not found"})
-        status = 200 if self.path in ("/capture", "/retrieve", "/explain", "/upsert") else 404
+        try:
+            status = 404
+            if self.path == "/capture":
+                status = self._handle_capture(body)
+            elif self.path == "/retrieve":
+                status = self._handle_retrieve(body)
+            elif self.path == "/explain":
+                status = self._handle_explain(body)
+            elif self.path == "/upsert":
+                status = self._handle_upsert(body)
+            else:
+                _json_response(self, 404, {"error": "not found"})
+        except (ValueError, KeyError) as exc:
+            status = 400
+            _json_response(self, 400, {"error": "invalid input", "detail": str(exc)})
         _metrics.record(self.path, status)
         self._log_request(status, t0)
 
@@ -244,9 +261,9 @@ class BrokerHandler(BaseHTTPRequestHandler):
 
     # -- handler implementations ------------------------------------------
 
-    def _handle_capture(self, body: dict[str, Any]) -> None:
-        client = body.pop("client", "")
-        dry_run = body.pop("dry_run", False)
+    def _handle_capture(self, body: dict[str, Any]) -> int:
+        client = body.get("client", "")
+        dry_run = body.get("dry_run", False)
 
         event = self.engine.normalize(body, client_name=client)
         result = self.engine.capture_event(event, dry_run=dry_run)
@@ -261,8 +278,9 @@ class BrokerHandler(BaseHTTPRequestHandler):
             },
             "backend_results": result.backend_results,
         })
+        return 200
 
-    def _handle_retrieve(self, body: dict[str, Any]) -> None:
+    def _handle_retrieve(self, body: dict[str, Any]) -> int:
         query = body.get("query", body.get("q", ""))
         scope_filters = body.get("scope_filters", body.get("scopes"))
 
@@ -282,8 +300,9 @@ class BrokerHandler(BaseHTTPRequestHandler):
                 for r in results
             ],
         })
+        return 200
 
-    def _handle_explain(self, body: dict[str, Any]) -> None:
+    def _handle_explain(self, body: dict[str, Any]) -> int:
         query = body.get("query", body.get("q", ""))
         scope_filters = body.get("scope_filters", body.get("scopes"))
 
@@ -292,9 +311,10 @@ class BrokerHandler(BaseHTTPRequestHandler):
             scope_filters=scope_filters,
         )
         _json_response(self, 200, explanation)
+        return 200
 
-    def _handle_upsert(self, body: dict[str, Any]) -> None:
-        from broker.schema import MemoryRecord, MemoryScope, MemoryType, Provenance
+    def _handle_upsert(self, body: dict[str, Any]) -> int:
+        from broker.schema import MemoryRecord, MemoryScope, MemoryType, Provenance, clamp_unit
 
         record = MemoryRecord(
             id=body.get("id", ""),
@@ -305,8 +325,8 @@ class BrokerHandler(BaseHTTPRequestHandler):
             memory_type=MemoryType(body.get("memory_type", "fact")),
             subject=body.get("subject", ""),
             content=body.get("content", ""),
-            confidence=body.get("confidence", 0.5),
-            importance=body.get("importance", 0.5),
+            confidence=clamp_unit(float(body.get("confidence", 0.5)), "confidence"),
+            importance=clamp_unit(float(body.get("importance", 0.5)), "importance"),
             provenance=Provenance(
                 actor=body.get("provenance", {}).get("actor", ""),
                 file=body.get("provenance", {}).get("file", ""),
@@ -321,6 +341,7 @@ class BrokerHandler(BaseHTTPRequestHandler):
             "record_id": record.id,
             "backend_results": results,
         })
+        return 200
 
 
 def serve(host: str = "", port: int = 0) -> None:
