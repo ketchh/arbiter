@@ -11,6 +11,11 @@ Endpoints:
   DELETE /cache         — flush the local cache
   GET  /health         — liveness check
 
+Auth: optional Bearer token via BROKER_API_KEY env var.
+  When set, all requests except GET /health must include:
+    Authorization: Bearer <key>
+  When unset, no auth is required (local-only use).
+
 Default bind: 127.0.0.1:8081 (configurable via BROKER_BIND_HOST/PORT).
 """
 
@@ -18,6 +23,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Any
@@ -26,6 +32,9 @@ from broker.config import load_config
 from broker.engine import BrokerEngine
 
 log = logging.getLogger(__name__)
+
+# Optional API key for non-localhost deployments
+_API_KEY = os.environ.get("BROKER_API_KEY", "")
 
 
 def _json_response(handler: "BrokerHandler", status: int, body: Any) -> None:
@@ -54,19 +63,30 @@ class BrokerHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: Any) -> None:
         log.info(format, *args)
 
+    def _check_auth(self) -> bool:
+        """Return True if request is authorized. Sends 401 and returns False otherwise."""
+        if not _API_KEY:
+            return True  # no key configured → open access (local use)
+        auth = self.headers.get("Authorization", "")
+        if auth == f"Bearer {_API_KEY}":
+            return True
+        _json_response(self, 401, {"error": "unauthorized"})
+        return False
+
     # -- CORS preflight ---------------------------------------------------
 
     def do_OPTIONS(self) -> None:
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
         self.end_headers()
 
     # -- GET routes -------------------------------------------------------
 
     def do_GET(self) -> None:
         if self.path == "/health":
+            # Health is always public
             _json_response(self, 200, {
                 "status": "ok",
                 "project_id": self.engine.config.project_id,
@@ -78,6 +98,8 @@ class BrokerHandler(BaseHTTPRequestHandler):
     # -- POST routes ------------------------------------------------------
 
     def do_POST(self) -> None:
+        if not self._check_auth():
+            return
         try:
             body = _read_json_body(self)
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
@@ -98,6 +120,8 @@ class BrokerHandler(BaseHTTPRequestHandler):
     # -- DELETE routes ----------------------------------------------------
 
     def do_DELETE(self) -> None:
+        if not self._check_auth():
+            return
         if self.path == "/cache":
             count = self.engine.flush_local_cache()
             _json_response(self, 200, {"flushed": count})
