@@ -25,19 +25,33 @@ AI tools (Claude Code, IDE extensions, automation scripts) each manage memory di
 ## Quick Start
 
 ```bash
-# Clone
+# Clone and install
 git clone https://github.com/ketchh/arbiter.git
 cd arbiter
+pip install -e .
 
 # Copy env and configure
 cp .env.example .env
-# Edit .env with your API keys (optional — works without them)
+# Edit .env — add SUPERMEMORY_API_KEY for long-term memory (optional)
 
-# Run the dry-run demo
-python -m broker dry-run
+# Start the server
+arbiter serve
 
-# Start the HTTP server (default: http://127.0.0.1:8081)
-python -m broker serve
+# In another terminal — send a memory
+arbiter capture "Switched auth from JWT to sessions" --scope project --type decision
+
+# Retrieve context
+arbiter retrieve "auth decisions" --scopes project
+
+# Check status
+arbiter status
+```
+
+### Docker
+
+```bash
+docker build -t arbiter .
+docker run -p 8081:8081 --env-file .env arbiter
 ```
 
 ### Requirements
@@ -146,12 +160,13 @@ python -m unittest discover tests -v
 
 ```
 broker/
-  __main__.py          CLI entry (dry-run, serve)
+  __main__.py          CLI: serve, dry-run, capture, retrieve, status
   engine.py            Core broker: normalize, capture, retrieve
   schema.py            BrokerEvent, MemoryRecord, MemoryScope
   policy.py            Write routing by scope and importance
   config.py            Config loader (.env + JSON, env var overrides)
-  server.py            HTTP server (stdlib http.server)
+  server.py            HTTP server with auth, rate limiting, metrics
+  hooks.py             Ruflo hook bridge (auto-capture events)
   adapters/
     supermemory.py     Supermemory REST API v3 (urllib)
     ruflo.py           Ruflo sqlite3 adapter
@@ -159,11 +174,23 @@ broker/
 tests/
   test_broker_roundtrip.py   17 unit tests
   test_server_http.py        15 HTTP integration tests
+  test_hooks.py              6 hook bridge tests
+pyproject.toml         Package config (pip install -e .)
+Dockerfile             Container deployment
 docs/
   memory-broker.md     Architecture and policy reference
-  setup-minimo.md      Setup guide
+```
+
+## CLI Reference
+
+```
+arbiter serve                          Start the HTTP server
+arbiter dry-run                        Demo event flow without side effects
+arbiter capture "text" -s project      Send a memory event
+arbiter retrieve "query" --scopes project,episodic
+arbiter status                         Health + metrics from running server
 ```
 
 ## License
 
-Private repository.
+MIT
