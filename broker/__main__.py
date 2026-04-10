@@ -139,6 +139,10 @@ def main() -> None:
         help="Path to the workspace root (default: current directory)",
     )
 
+    srv = sub.add_parser("serve", help="Start the broker HTTP server")
+    srv.add_argument("--host", default="", help="Bind host (default: from config)")
+    srv.add_argument("--port", type=int, default=0, help="Bind port (default: from config)")
+
     args = parser.parse_args()
     if args.command is None:
         parser.print_help()
@@ -151,6 +155,9 @@ def main() -> None:
 
     if args.command == "dry-run":
         cmd_dry_run(args)
+    elif args.command == "serve":
+        from broker.server import serve
+        serve(host=args.host, port=args.port)
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@
 
 # Continuation Instructions
 
-_Last updated: 2026-04-10 (git init + GitHub push + GitHub Actions app installed). Read this file completely before touching anything._
+_Last updated: 2026-04-10 (Supermemory adapter real, HTTP server, tests). Read this file completely before touching anything._
 
 ---
 
@@ -18,6 +18,7 @@ claude-flow.config.json        ← Ruflo project config
 .gitignore                     ← includes .swarm/, .env, .broker/
 broker/                        ← Python memory broker MVP
 docs/                          ← architecture docs
+tests/                         ← unittest round-trip tests (17 tests, all passing)
 .swarm/                        ← Ruflo runtime data (memory.db, schema.sql, tasks)
 .claude-flow/                  ← Ruflo task store from swarm experiments
 .broker/                       ← local cache backend files (one JSON per scope)
@@ -37,7 +38,8 @@ docs/                          ← architecture docs
 | `adapters/__init__.py` | real | |
 | `adapters/ruflo.py` | **REAL** | sqlite3 adapter reading/writing `.swarm/memory.db`; key pattern `broker:<scope>:<record_id>`; namespace = scope value; ON CONFLICT DO UPDATE; access_count tracking |
 | `adapters/local_cache.py` | **REAL** | flat-file JSON backend under `.broker/cache/`; one file per scope |
-| `adapters/supermemory.py` | **STUB** | logs writes, returns empty — no real API calls yet |
+| `server.py` | **REAL** | HTTP server (http.server); endpoints: /capture, /retrieve, /explain, /upsert, /cache, /health; CORS; default 127.0.0.1:8081 |
+| `adapters/supermemory.py` | **REAL** | urllib-based REST adapter for Supermemory API v3; POST /v3/documents + POST /v3/search; graceful NO_KEY degradation |
 
 ### Documentation (`docs/`)
 | File | Content |
@@ -93,35 +95,36 @@ A swarm with 2 agents (agent-reviewer, agent-planner) ran successfully:
 - ✅ Git repo initialized, 23 files committed (`initial broker MVP with Ruflo sqlite integration`)
 - ✅ Pushed to `https://github.com/ketchh/arbiter` (branch `main`)
 - ✅ GitHub Actions Claude Code app installed on the repo
+- ✅ Supermemory adapter: real urllib REST implementation (v3 API), graceful NO_KEY degradation
+- ✅ HTTP server (`broker/server.py`): /capture, /retrieve, /explain, /upsert, /cache, /health; CORS; CLI `python -m broker serve`
+- ✅ Automated tests: 17 tests covering clamp, normalize, policy, local cache round-trip, Ruflo round-trip, Supermemory graceful degradation, dry-run, server setup
 
 ---
 
 ## Pending Work (priority order)
 
-### 1. Supermemory adapter (highest architectural value)
-- File: `broker/adapters/supermemory.py`
-- Replace the stub with real Supermemory REST API calls.
-- Prefer `urllib` or `http.client` over installing new packages.
-- Keep the same `upsert(record)` / `retrieve(scope, limit)` interface as ruflo.py and local_cache.py.
-- Guard all API calls behind `if not self.api_key: return` — graceful degradation when key is absent.
-- Write a round-trip proof (write → retrieve from real API) when `SUPERMEMORY_API_KEY` is configured; document how to test it manually if the key is not present.
-- Do not make Supermemory the sole backend — the broker policy layer decides routing.
+### 1. Supermemory live round-trip proof
+- Adapter is real code (`broker/adapters/supermemory.py`), but no API key is configured yet.
+- Set `SUPERMEMORY_API_KEY` in `.env`, then run `python -m broker dry-run` or `python -m broker serve` to test.
+- Verify: POST /capture with a project-scope event → check Supermemory dashboard for the document.
+- Verify: POST /retrieve → confirm results come back from Supermemory search.
 
-### 2. Broker as local service (enables multi-client and VPS scenarios)
-- Currently CLI only via `python -m broker dry-run`.
-- Next direction: expose a minimal HTTP endpoint (port 8081 per config) so clients can POST events and GET context without importing the broker package directly.
-- No cloud deployment yet — local first.
+### 2. Broker service hardening
+- HTTP server works but has no auth — add an optional `BROKER_API_KEY` header check for non-localhost use.
+- Add request logging middleware and basic rate limiting before VPS deployment.
+- Consider adding a `/metrics` endpoint for monitoring.
 
-### 3. Automated tests
-- No tests exist for the broker round-trip.
-- Minimum viable: test `normalize_client_event → capture_event → retrieve` end-to-end against a temp sqlite DB (not the real `.swarm/memory.db`).
+### 3. Integration tightening
+- Wire broker HTTP endpoints into Claude Code as a custom tool or MCP resource.
+- Explore Ruflo hooks (`hooks_post-task`, `hooks_post-edit`) to auto-capture events to the broker.
+- Test multi-workspace isolation via container tags.
 
 ---
 
 ## Required First Task For The Next Agent
-1. Perform a code review of every file currently in this workspace — findings first, ordered by severity.
-2. If there are no blockers, proceed with the pending work listed above, in priority order.
-3. Report what you did and what remains before calling task_complete.
+1. Set `SUPERMEMORY_API_KEY` in `.env` and run a live round-trip proof against the real Supermemory API.
+2. If the round-trip succeeds, proceed with the pending work listed above, in priority order.
+3. Report what you did and what remains before finishing.
 
 ---
 
