@@ -2,7 +2,7 @@
 
 # Continuation Instructions
 
-_Last updated: 2026-04-10 (fix stale Supermemory-stub refs, delete setup-minimo + swarm-report, clean .env.example). Read this file completely before touching anything._
+_Last updated: 2026-04-10 (Supermemory live test, Bearer auth, 30 tests). Read this file completely before touching anything._
 
 ---
 
@@ -95,22 +95,25 @@ A swarm with 2 agents (agent-reviewer, agent-planner) ran successfully:
 - ✅ GitHub Actions Claude Code app installed on the repo
 - ✅ Supermemory adapter: real urllib REST implementation (v3 API), graceful NO_KEY degradation
 - ✅ HTTP server (`broker/server.py`): /capture, /retrieve, /explain, /upsert, /cache, /health; CORS; CLI `python -m broker serve`
-- ✅ Automated tests: 17 tests covering clamp, normalize, policy, local cache round-trip, Ruflo round-trip, Supermemory graceful degradation, dry-run, server setup
+- ✅ Automated tests: 17 unit tests + 13 HTTP tests (30 total)
+- ✅ Supermemory live write proof: POST /v3/documents succeeded with real API key (doc ID returned)
+- ✅ Supermemory search: 401 with current key (key may need search permissions from console.supermemory.ai)
+- ✅ Bearer auth on HTTP server: `BROKER_API_KEY` env var, /health stays public
 
 ---
 
 ## Pending Work (priority order)
 
-### 1. Supermemory live round-trip proof
-- Adapter is real code (`broker/adapters/supermemory.py`), but no API key is configured yet.
-- Set `SUPERMEMORY_API_KEY` in `.env`, then run `python -m broker dry-run` or `python -m broker serve` to test.
-- Verify: POST /capture with a project-scope event → check Supermemory dashboard for the document.
-- Verify: POST /retrieve → confirm results come back from Supermemory search.
+### 1. Supermemory search fix
+- Write works (POST /v3/documents → 200), search returns 401.
+- Likely the API key needs search/read permissions — regenerate from console.supermemory.ai or check plan limits.
+- Once search works, full round-trip is proven.
 
-### 2. Broker service hardening
-- HTTP server works but has no auth — add an optional `BROKER_API_KEY` header check for non-localhost use.
-- Add request logging middleware and basic rate limiting before VPS deployment.
-- Consider adding a `/metrics` endpoint for monitoring.
+### 2. Request logging and rate limiting
+- HTTP server has auth but no request logging middleware or rate limiting.
+- Add structured request log (method, path, status, duration).
+- Add basic rate limiting (per-IP or global) before VPS deployment.
+- Consider `/metrics` endpoint.
 
 ### 3. Integration tightening
 - Wire broker HTTP endpoints into Claude Code as a custom tool or MCP resource.
@@ -120,8 +123,8 @@ A swarm with 2 agents (agent-reviewer, agent-planner) ran successfully:
 ---
 
 ## Required First Task For The Next Agent
-1. Set `SUPERMEMORY_API_KEY` in `.env` and run a live round-trip proof against the real Supermemory API.
-2. If the round-trip succeeds, proceed with the pending work listed above, in priority order.
+1. Check if Supermemory search (POST /v3/search) is still returning 401 — if so, the API key needs to be regenerated from console.supermemory.ai with read permissions.
+2. Proceed with the pending work listed above, in priority order.
 3. Report what you did and what remains before finishing.
 
 ---
