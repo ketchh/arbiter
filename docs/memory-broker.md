@@ -78,8 +78,8 @@
 - First implementation target: Python 3.11+
 - Local-first execution model
 - Dry-run mode before real writes
-- Ruflo adapter now performs real local reads and writes against `.swarm/memory.db`
-- Supermemory adapter remains a stub until the hosted or self-hosted backend is chosen
+- Ruflo adapter performs real local reads and writes against `.swarm/memory.db`
+- Supermemory adapter is real (urllib + REST API v3), gracefully degrades without API key
 - Claude Code is the first client adapter, not a special-case storage path
 
 ## Current Practical Role
@@ -88,7 +88,7 @@
 - It decides which backends receive each write based on scope and policy.
 - It currently writes to both the local JSON cache and Ruflo's local sqlite memory.
 - It retrieves scoped context from both local cache and Ruflo through one interface.
-- It keeps Supermemory optional and replaceable until the remote memory target is finalized.
+- It keeps Supermemory behind a policy boundary — the adapter is ready, activation requires only an API key.
 
 ## Architecture Sketch
 ```text

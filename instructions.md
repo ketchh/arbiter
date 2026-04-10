@@ -1,9 +1,8 @@
-@docs/setup-minimo.md
 @docs/memory-broker.md
 
 # Continuation Instructions
 
-_Last updated: 2026-04-10 (Supermemory adapter real, HTTP server, tests). Read this file completely before touching anything._
+_Last updated: 2026-04-10 (fix stale Supermemory-stub refs, delete setup-minimo + swarm-report, clean .env.example). Read this file completely before touching anything._
 
 ---
 
@@ -44,9 +43,7 @@ tests/                         ← unittest round-trip tests (17 tests, all pass
 ### Documentation (`docs/`)
 | File | Content |
 |------|---------|
-| `memory-broker.md` | full architecture + "Current Practical Role" section (updated) |
-| `setup-minimo.md` | manual setup guide (updated) |
-| `ruflo-swarm-report.md` | full trace of the 21-call swarm experiment |
+| `memory-broker.md` | full architecture + "Current Practical Role" section |
 | `topologia-server.md` | server topology |
 
 ---
@@ -74,9 +71,10 @@ A swarm with 2 agents (agent-reviewer, agent-planner) ran successfully:
 - Broker write → Ruflo sqlite read confirmed via `broker/adapters/ruflo.py`
 
 ### Supermemory
-- **Not connected yet.** Adapter at `broker/adapters/supermemory.py` is a stub.
-- Canonical long-term memory target; waiting for API key in `SUPERMEMORY_API_KEY` env var.
-- Do not bypass the broker layer when integrating — all writes must go through `engine.py`.
+- Adapter at `broker/adapters/supermemory.py` is **real code** (urllib + Supermemory REST API v3).
+- Graceful degradation: works as a no-op when `SUPERMEMORY_API_KEY` is not set.
+- Canonical long-term memory target; needs API key in `SUPERMEMORY_API_KEY` env var to go live.
+- Do not bypass the broker layer — all writes must go through `engine.py`.
 
 ---
 

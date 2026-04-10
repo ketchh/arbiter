@@ -23,4 +23,6 @@
 - Before expanding scope, make the current step runnable or at least configuration-complete.
 
 ## Current Target
-- Reach a first local path where Claude Code works as the current adapter, Ruflo can be attached as orchestrator, Supermemory is ready to be attached as external memory, and the broker contract is explicit enough to swap clients later with minimal changes.
+- All three backends are implemented (Ruflo sqlite, local JSON cache, Supermemory REST API).
+- Supermemory activation requires only setting `SUPERMEMORY_API_KEY` in `.env`.
+- Next milestone: live Supermemory round-trip proof, then broker service hardening for VPS deployment.

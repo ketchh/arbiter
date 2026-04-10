@@ -1,8 +1,8 @@
 """Local JSON file cache — canonical temporary backend.
 
 Stores memory records as one JSON file per scope under the configured
-cache directory. It coexists with the Ruflo sqlite adapter in the MVP,
-while Supermemory remains a stub until the remote backend is chosen.
+cache directory. It coexists with the Ruflo sqlite adapter and the
+Supermemory REST adapter in the broker's multi-backend architecture.
 """
 
 from __future__ import annotations
