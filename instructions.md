@@ -2,7 +2,7 @@
 
 # Continuation Instructions
 
-_Last updated: 2026-04-10 (hook bridge, rate limiting, metrics, 38 tests). Read this file completely before touching anything._
+_Last updated: 2026-04-10 (pip-installable, CLI, Dockerfile, 38 tests). Read this file completely before touching anything._
 
 ---
 
@@ -10,6 +10,8 @@ _Last updated: 2026-04-10 (hook bridge, rate limiting, metrics, 38 tests). Read 
 
 ### Workspace root (`C:\Users\aless\Documents\ancora non lo so\SIR\`)
 ```
+pyproject.toml                 ← pip install -e . / arbiter CLI entry point
+Dockerfile                     ← container deployment (python:3.12-slim)
 CLAUDE.md                      ← workspace entrypoint for Claude Code
 instructions.md                ← this file (imported by CLAUDE.md)
 claude-flow.config.json        ← Ruflo project config
@@ -106,6 +108,9 @@ A swarm with 2 agents (agent-reviewer, agent-planner) ran successfully:
 - ✅ Ruflo hook bridge (`broker/hooks.py`): post-task, post-edit, session → broker /capture
 - ✅ Ruflo MCP memory: broker config + architecture stored in `broker` namespace
 - ✅ 38 tests total (17 unit + 15 HTTP + 6 hooks), all passing
+- ✅ pip-installable (`pip install -e .` → `arbiter` CLI command)
+- ✅ CLI: serve, dry-run, capture, retrieve, status
+- ✅ Dockerfile for container/VPS deployment
 
 ---
 
@@ -116,9 +121,8 @@ A swarm with 2 agents (agent-reviewer, agent-planner) ran successfully:
 - Verify that retrieve scoped by workspace_id returns only matching records.
 
 ### 2. VPS deployment
-- Dockerize the broker server for deployment.
-- Document systemd/PM2 service configuration.
-- Configure BROKER_API_KEY for production auth.
+- Dockerfile ready — test with `docker build -t arbiter . && docker run -p 8081:8081 --env-file .env arbiter`.
+- Document systemd/PM2 service configuration for non-Docker setups.
 
 ### 3. Claude Code custom tool / MCP resource
 - Register broker endpoints as MCP resources so Claude Code can query memory inline.
