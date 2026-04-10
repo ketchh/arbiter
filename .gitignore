@@ -4,10 +4,13 @@
 
 CLAUDE.local.md
 .claude/settings.local.json
+.claude/
 
 .ruflo/
 .swarm/
+.claude-flow/
 .broker/cache/
 
 node_modules/
 __pycache__/
+*.egg-info/

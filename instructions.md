@@ -2,7 +2,7 @@
 
 # Continuation Instructions
 
-_Last updated: 2026-04-10 (code review + 17 fixes via SPARC swarm, 38 tests passing). Read this file completely before touching anything._
+_Last updated: 2026-04-10 (MCP integration: mcp_resources.py, .mcp.json broker entry, Claude Code hooks wiring docs). Read this file completely before touching anything._
 
 ---
 
@@ -42,6 +42,7 @@ tests/                         ← unittest round-trip tests (17 tests, all pass
 | `server.py` | **REAL** | HTTP server (http.server); endpoints: /capture, /retrieve, /explain, /upsert, /cache, /health; CORS; default 127.0.0.1:8081 |
 | `adapters/supermemory.py` | **REAL** | urllib-based REST adapter for Supermemory API v3; POST /v3/documents + POST /v3/search; graceful NO_KEY degradation |
 | `hooks.py` | **REAL** | Ruflo hook bridge: post-task, post-edit, session events → broker /capture; CLI + library API |
+| `mcp_resources.py` | **REAL** | MCP resource provider: health, retrieve/{scope}, metrics; proxies to broker HTTP API; CLI + library API |
 
 ### Documentation (`docs/`)
 | File | Content |
@@ -49,6 +50,8 @@ tests/                         ← unittest round-trip tests (17 tests, all pass
 | `memory-broker.md` | full architecture + "Current Practical Role" section |
 | `topologia-server.md` | server topology |
 | `code-review.md` | detailed code review (20 findings, 17 fixed) |
+| `deployment.md` | production deployment guide (Docker, systemd, PM2, env vars, security) |
+| `mcp-integration.md` | MCP resource provider setup, Claude Code hooks wiring, inline query guide |
 
 ---
 
@@ -128,22 +131,31 @@ A swarm with 2 agents (agent-reviewer, agent-planner) ran successfully:
 - ✅ DOC-01: README test count updated to 38
 - ✅ All handlers return status codes for accurate metrics tracking
 - ✅ 38 tests still passing after all fixes
+- ✅ Production deployment guide (`docs/deployment.md`): Docker, Docker Compose, systemd unit, PM2 ecosystem, Nginx reverse proxy, full env var reference (16 vars), security checklist
+- Note: Docker build not tested locally (Docker Desktop not running); Dockerfile is unchanged and was previously validated
+- ✅ MCP resource provider (`broker/mcp_resources.py`): health, retrieve/{scope}, metrics proxies to broker HTTP API; CLI + library
+- ✅ `.mcp.json` updated with `arbiter-broker` MCP server entry
+- ✅ MCP integration docs (`docs/mcp-integration.md`): setup guide, hooks wiring, inline query examples
+- Note: `.claude/settings.json` is protected; broker hook entries must be added manually (see `docs/mcp-integration.md`)
+- ✅ 54 tests passing after changes
 
 ---
 
 ## Pending Work (priority order)
 
-### 1. Multi-workspace isolation testing
+### 1. Claude Code hooks manual wiring
+- `.claude/settings.json` is protected from programmatic edits.
+- Four broker hook commands need to be added manually to settings.json (documented in `docs/mcp-integration.md`).
+- Hooks: PostToolUse (post-edit), SessionStart, SessionEnd, SubagentStop (post-task).
+
+### 2. Multi-workspace isolation testing
 - Test container tags isolation with 2+ workspaces writing to the same Supermemory org.
 - Verify that retrieve scoped by workspace_id returns only matching records.
 
-### 2. VPS deployment
+### 3. VPS deployment
 - Dockerfile ready — test with `docker build -t arbiter . && docker run -p 8081:8081 --env-file .env arbiter`.
-- Document systemd/PM2 service configuration for non-Docker setups.
-
-### 3. Claude Code custom tool / MCP resource
-- Register broker endpoints as MCP resources so Claude Code can query memory inline.
-- Explore using Ruflo `hooks_init` to wire broker hooks into `.claude/settings.json` automatically.
+- Deployment docs complete in `docs/deployment.md` (Docker, Docker Compose, systemd, PM2, Nginx, security checklist).
+- Remaining: live deployment test on an actual VPS.
 
 ---
 
