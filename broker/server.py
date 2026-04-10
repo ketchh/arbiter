@@ -9,7 +9,8 @@ Endpoints:
   POST /explain        — explain what retrieval would do
   POST /upsert         — direct upsert of a memory record
   DELETE /cache         — flush the local cache
-  GET  /health         — liveness check
+  GET  /health         — liveness check (no auth, no rate limit)
+  GET  /metrics        — request counters and uptime
 
 Auth: optional Bearer token via BROKER_API_KEY env var.
   When set, all requests except GET /health must include:
@@ -36,6 +37,65 @@ log = logging.getLogger(__name__)
 
 # Optional API key for non-localhost deployments
 _API_KEY = os.environ.get("BROKER_API_KEY", "")
+
+# Rate limiting: max requests per IP per window
+_RATE_LIMIT = int(os.environ.get("BROKER_RATE_LIMIT", "60"))  # per window
+_RATE_WINDOW = int(os.environ.get("BROKER_RATE_WINDOW", "60"))  # seconds
+
+
+class _RateLimiter:
+    """Simple in-memory per-IP sliding-window rate limiter."""
+
+    def __init__(self, max_requests: int, window_seconds: int) -> None:
+        self.max_requests = max_requests
+        self.window = window_seconds
+        self._hits: dict[str, list[float]] = {}
+
+    def is_allowed(self, client_ip: str) -> bool:
+        if self.max_requests <= 0:
+            return True  # disabled
+        now = time.monotonic()
+        cutoff = now - self.window
+        hits = self._hits.get(client_ip, [])
+        hits = [t for t in hits if t > cutoff]
+        if len(hits) >= self.max_requests:
+            self._hits[client_ip] = hits
+            return False
+        hits.append(now)
+        self._hits[client_ip] = hits
+        return True
+
+
+_rate_limiter = _RateLimiter(_RATE_LIMIT, _RATE_WINDOW)
+
+
+class _Metrics:
+    """Simple request counter for /metrics endpoint."""
+
+    def __init__(self) -> None:
+        self.total_requests = 0
+        self.requests_by_path: dict[str, int] = {}
+        self.requests_by_status: dict[int, int] = {}
+        self.rate_limited = 0
+        self._start_time = time.monotonic()
+
+    def record(self, path: str, status: int) -> None:
+        self.total_requests += 1
+        self.requests_by_path[path] = self.requests_by_path.get(path, 0) + 1
+        self.requests_by_status[status] = self.requests_by_status.get(status, 0) + 1
+
+    def to_dict(self) -> dict[str, Any]:
+        uptime = time.monotonic() - self._start_time
+        return {
+            "uptime_seconds": round(uptime, 1),
+            "total_requests": self.total_requests,
+            "rate_limited": self.rate_limited,
+            "by_path": self.requests_by_path,
+            "by_status": {str(k): v for k, v in self.requests_by_status.items()},
+        }
+
+
+_metrics = _Metrics()
 
 
 def _json_response(handler: "BrokerHandler", status: int, body: Any) -> None:
@@ -73,6 +133,15 @@ class BrokerHandler(BaseHTTPRequestHandler):
             self.command, self.path, status, duration_ms, client,
         )
 
+    def _check_rate_limit(self) -> bool:
+        """Return True if under rate limit. Sends 429 and returns False otherwise."""
+        client_ip = self.client_address[0]
+        if _rate_limiter.is_allowed(client_ip):
+            return True
+        _metrics.rate_limited += 1
+        _json_response(self, 429, {"error": "rate limit exceeded"})
+        return False
+
     def _check_auth(self) -> bool:
         """Return True if request is authorized. Sends 401 and returns False otherwise."""
         if not _API_KEY:
@@ -97,28 +166,43 @@ class BrokerHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         t0 = time.monotonic()
         if self.path == "/health":
-            # Health is always public
-            _json_response(self, 200, {
+            # Health is always public, no rate limit
+            status = 200
+            _json_response(self, status, {
                 "status": "ok",
                 "project_id": self.engine.config.project_id,
                 "backends": list(self.engine._backends.keys()),
             })
-            self._log_request(200, t0)
+        elif self.path == "/metrics":
+            if not self._check_auth():
+                _metrics.record("/metrics", 401)
+                self._log_request(401, t0)
+                return
+            status = 200
+            _json_response(self, status, _metrics.to_dict())
         else:
-            _json_response(self, 404, {"error": "not found"})
-            self._log_request(404, t0)
+            status = 404
+            _json_response(self, status, {"error": "not found"})
+        _metrics.record(self.path, status)
+        self._log_request(status, t0)
 
     # -- POST routes ------------------------------------------------------
 
     def do_POST(self) -> None:
         t0 = time.monotonic()
+        if not self._check_rate_limit():
+            _metrics.record(self.path, 429)
+            self._log_request(429, t0)
+            return
         if not self._check_auth():
+            _metrics.record(self.path, 401)
             self._log_request(401, t0)
             return
         try:
             body = _read_json_body(self)
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             _json_response(self, 400, {"error": "invalid JSON", "detail": str(exc)})
+            _metrics.record(self.path, 400)
             self._log_request(400, t0)
             return
 
@@ -132,22 +216,31 @@ class BrokerHandler(BaseHTTPRequestHandler):
             self._handle_upsert(body)
         else:
             _json_response(self, 404, {"error": "not found"})
-        self._log_request(200 if self.path in ("/capture", "/retrieve", "/explain", "/upsert") else 404, t0)
+        status = 200 if self.path in ("/capture", "/retrieve", "/explain", "/upsert") else 404
+        _metrics.record(self.path, status)
+        self._log_request(status, t0)
 
     # -- DELETE routes ----------------------------------------------------
 
     def do_DELETE(self) -> None:
         t0 = time.monotonic()
+        if not self._check_rate_limit():
+            _metrics.record(self.path, 429)
+            self._log_request(429, t0)
+            return
         if not self._check_auth():
+            _metrics.record(self.path, 401)
             self._log_request(401, t0)
             return
         if self.path == "/cache":
             count = self.engine.flush_local_cache()
             _json_response(self, 200, {"flushed": count})
-            self._log_request(200, t0)
+            status = 200
         else:
             _json_response(self, 404, {"error": "not found"})
-            self._log_request(404, t0)
+            status = 404
+        _metrics.record(self.path, status)
+        self._log_request(status, t0)
 
     # -- handler implementations ------------------------------------------
 

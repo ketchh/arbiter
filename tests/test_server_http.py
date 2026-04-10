@@ -221,5 +221,83 @@ class TestServerAuth(unittest.TestCase):
         self.assertEqual(status, 401)
 
 
+class TestMetricsEndpoint(unittest.TestCase):
+    """Test /metrics endpoint."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmpdir = tempfile.mkdtemp()
+        cfg = BrokerConfig(
+            local_cache_path=cls._tmpdir,
+            supermemory=BackendConfig(enabled=False),
+            ruflo=BackendConfig(enabled=False),
+            local_cache=BackendConfig(enabled=True),
+        )
+        cfg.write_policy = {"project": ["local_cache"]}
+        cfg.retrieval_limits = {"project": 10}
+        cls.engine = BrokerEngine(cfg)
+        cls.server, cls.base = _start_server(cls.engine)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+
+    def test_metrics_returns_counters(self):
+        # Make a request first so metrics have something
+        _request(f"{self.base}/health")
+        status, body = _request(f"{self.base}/metrics")
+        self.assertEqual(status, 200)
+        self.assertIn("total_requests", body)
+        self.assertIn("uptime_seconds", body)
+        self.assertIn("by_path", body)
+        self.assertIn("by_status", body)
+        self.assertGreater(body["total_requests"], 0)
+
+
+class TestRateLimiting(unittest.TestCase):
+    """Test rate limiting enforcement."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmpdir = tempfile.mkdtemp()
+        cfg = BrokerConfig(
+            local_cache_path=cls._tmpdir,
+            supermemory=BackendConfig(enabled=False),
+            ruflo=BackendConfig(enabled=False),
+            local_cache=BackendConfig(enabled=True),
+        )
+        cfg.write_policy = {"project": ["local_cache"]}
+        cfg.retrieval_limits = {"project": 10}
+        cls.engine = BrokerEngine(cfg)
+
+        # Set a very low rate limit for testing
+        import broker.server as srv
+        cls._orig_limiter = srv._rate_limiter
+        srv._rate_limiter = srv._RateLimiter(max_requests=3, window_seconds=60)
+
+        cls.server, cls.base = _start_server(cls.engine)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        import broker.server as srv
+        srv._rate_limiter = cls._orig_limiter
+
+    def test_rate_limit_enforcement(self):
+        # First 3 requests should succeed
+        for i in range(3):
+            status, _ = _request(f"{self.base}/capture", "POST", {
+                "scope": "project", "content": f"rate test {i}",
+            })
+            self.assertEqual(status, 200, f"Request {i} should succeed")
+
+        # 4th request should be rate limited
+        status, body = _request(f"{self.base}/capture", "POST", {
+            "scope": "project", "content": "should be blocked",
+        })
+        self.assertEqual(status, 429)
+        self.assertEqual(body["error"], "rate limit exceeded")
+
+
 if __name__ == "__main__":
     unittest.main()
