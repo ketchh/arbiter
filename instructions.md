@@ -3,7 +3,7 @@
 
 # Continuation Instructions
 
-_Last updated: 2026-04-10. Read this file completely before touching anything._
+_Last updated: 2026-04-10 (git init + GitHub push + GitHub Actions app installed). Read this file completely before touching anything._
 
 ---
 
@@ -90,17 +90,15 @@ A swarm with 2 agents (agent-reviewer, agent-planner) ran successfully:
 - ✅ `.gitignore` includes `.swarm/`
 - ✅ Swarm experiment documented in `docs/ruflo-swarm-report.md`
 - ✅ All documentation synced to real state
+- ✅ Git repo initialized, 23 files committed (`initial broker MVP with Ruflo sqlite integration`)
+- ✅ Pushed to `https://github.com/ketchh/arbiter` (branch `main`)
+- ✅ GitHub Actions Claude Code app installed on the repo
 
 ---
 
 ## Pending Work (priority order)
 
-### 1. Git repository initialization (trivial, do first)
-- `git init` has never been run. No commit history exists.
-- Run: `git init && git add . && git commit -m "initial broker MVP with Ruflo sqlite integration"`
-- Do NOT commit `.env` or `.swarm/memory.db` (already in .gitignore).
-
-### 2. Supermemory adapter (highest architectural value)
+### 1. Supermemory adapter (highest architectural value)
 - File: `broker/adapters/supermemory.py`
 - Replace the stub with real Supermemory REST API calls.
 - Prefer `urllib` or `http.client` over installing new packages.
@@ -109,12 +107,12 @@ A swarm with 2 agents (agent-reviewer, agent-planner) ran successfully:
 - Write a round-trip proof (write → retrieve from real API) when `SUPERMEMORY_API_KEY` is configured; document how to test it manually if the key is not present.
 - Do not make Supermemory the sole backend — the broker policy layer decides routing.
 
-### 3. Broker as local service (enables multi-client and VPS scenarios)
+### 2. Broker as local service (enables multi-client and VPS scenarios)
 - Currently CLI only via `python -m broker dry-run`.
 - Next direction: expose a minimal HTTP endpoint (port 8081 per config) so clients can POST events and GET context without importing the broker package directly.
 - No cloud deployment yet — local first.
 
-### 4. Automated tests
+### 3. Automated tests
 - No tests exist for the broker round-trip.
 - Minimum viable: test `normalize_client_event → capture_event → retrieve` end-to-end against a temp sqlite DB (not the real `.swarm/memory.db`).
 
@@ -136,3 +134,26 @@ A swarm with 2 agents (agent-reviewer, agent-planner) ran successfully:
 - No secrets in committed files
 - No autonomous package installation without explicit user approval
 - Broker is the only layer allowed to define read/write memory policy across tools
+
+---
+
+## Mandatory Rule: Keep This File Up To Date
+
+Every agent — human or AI — that completes a task **must** update this file before finishing.
+
+**What to update:**
+1. The `_Last updated_` line at the top — date + one-line summary of what changed.
+2. Move completed items to the `## Completed Work` section (add ✅ prefix).
+3. Remove or update items in `## Pending Work` to reflect what is actually next.
+4. If new files were created, add them to the relevant table in `## Snapshot`.
+5. If architecture decisions changed, update `## Architecture Rules` and `## Integration State`.
+
+**Why this matters:**
+- This file is the single source of truth for project continuity across sessions and agents.
+- Without it being accurate, the next agent (or the user) has no reliable starting point.
+- Outdated next steps waste time or cause regressions.
+
+**Format for the last-updated line:**
+```
+_Last updated: YYYY-MM-DD (brief description of what changed). Read this file completely before touching anything._
+```
