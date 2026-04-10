@@ -41,6 +41,8 @@ class SupermemoryBackend:
         self.base_url = (base_url or _BASE_URL).rstrip("/")
         self.extra = extra or {}
         self._connected = bool(api_key)
+        if self._connected:
+            log.info("[supermemory] initialized with API key (len=%d)", len(api_key))
 
     # -- internal helpers ---------------------------------------------------
 
@@ -207,18 +209,33 @@ class SupermemoryBackend:
             )
             return []
 
-        # Parse search results — Supermemory returns chunks with metadata
-        raw_results = result.get("results", [])
+        # Parse search results — Supermemory may return results in various shapes
+        # depending on API version: "results", "memories", or top-level list.
+        raw_results = (
+            result.get("results")
+            or result.get("memories")
+            or (result if isinstance(result, list) else [])
+        )
         records: list[dict[str, Any]] = []
 
         for item in raw_results[:limit]:
+            if not isinstance(item, dict):
+                continue
             metadata = item.get("metadata", {})
+            # Content can be in different fields depending on response shape
+            content = (
+                item.get("content")
+                or item.get("chunk")
+                or item.get("text")
+                or item.get("summary")
+                or ""
+            )
             records.append({
-                "id": metadata.get("broker_id", item.get("id", "")),
+                "id": metadata.get("broker_id", item.get("id", item.get("customId", ""))),
                 "event_id": metadata.get("broker_event_id", ""),
                 "scope": metadata.get("scope", scope_val),
                 "memory_type": metadata.get("memory_type", "fact"),
-                "content": item.get("content", item.get("chunk", "")),
+                "content": content,
                 "confidence": metadata.get("confidence", 0.5),
                 "importance": metadata.get("importance", 0.5),
                 "user_id": metadata.get("user_id", user_id),
