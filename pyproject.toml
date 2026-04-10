@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arbiter-broker"
+version = "0.1.0"
+description = "Runtime-agnostic memory broker for AI clients"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [{name = "ketchh"}]
+
+[project.scripts]
+arbiter = "broker.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["broker*"]
+
+[tool.setuptools.package-data]
+broker = ["config.example.json"]
