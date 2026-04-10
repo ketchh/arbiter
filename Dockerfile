@@ -5,7 +5,10 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY broker/ broker/
 
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir . \
+ && useradd -r -s /bin/false arbiter
+
+USER arbiter
 
 # Default env — override at runtime
 ENV BROKER_BIND_HOST=0.0.0.0

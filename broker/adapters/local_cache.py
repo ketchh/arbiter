@@ -23,8 +23,12 @@ class LocalCacheBackend:
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
+    _VALID_SCOPES = {"profile", "project", "episodic", "procedural", "governance"}
+
     def _scope_path(self, scope: MemoryScope | str) -> Path:
         scope_val = scope.value if isinstance(scope, MemoryScope) else scope
+        if scope_val not in self._VALID_SCOPES:
+            raise ValueError(f"Invalid scope: {scope_val!r}")
         return self.cache_dir / f"{scope_val}.json"
 
     def _read_scope(self, scope: MemoryScope | str) -> list[dict[str, Any]]:

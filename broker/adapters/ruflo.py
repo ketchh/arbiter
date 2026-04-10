@@ -20,6 +20,12 @@ from broker.schema import MemoryRecord, MemoryScope
 
 log = logging.getLogger(__name__)
 
+
+def _escape_like(s: str) -> str:
+    """Escape LIKE-special characters so user input is treated literally."""
+    return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 # Ruflo's memory_entries.type enum — "semantic" is the safest generic choice.
 _RUFLO_TYPE_MAP: dict[str, str] = {
     "profile": "semantic",
@@ -204,11 +210,12 @@ class RufloBackend:
 
             if query:
                 # Split query into words; each word must appear in the content.
+                # LIKE wildcards in user input are escaped to prevent abuse.
                 for i, word in enumerate(query.split()):
                     if word:
                         param_key = f"qw{i}"
-                        clauses.append(f"content LIKE :{param_key}")
-                        params[param_key] = f"%{word}%"
+                        clauses.append(f"content LIKE :{param_key} ESCAPE '\\'")
+                        params[param_key] = f"%{_escape_like(word)}%"
 
             where = " AND ".join(clauses)
             sql = f"""

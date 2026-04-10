@@ -22,6 +22,7 @@ Default bind: 127.0.0.1:8081 (configurable via BROKER_BIND_HOST/PORT).
 
 from __future__ import annotations
 
+import hmac
 import json
 import logging
 import os
@@ -69,6 +70,11 @@ class _RateLimiter:
             return False
         hits.append(now)
         self._hits[client_ip] = hits
+        # Periodic cleanup: prune IPs with no recent hits (every 100 requests)
+        if self.max_requests > 0 and len(self._hits) > 100:
+            stale = [ip for ip, ts in self._hits.items() if not ts or ts[-1] <= cutoff]
+            for ip in stale:
+                del self._hits[ip]
         return True
 
 
@@ -136,9 +142,10 @@ class BrokerHandler(BaseHTTPRequestHandler):
     def _log_request(self, status: int, start: float) -> None:
         duration_ms = (time.monotonic() - start) * 1000
         client = self.client_address[0]
+        safe_path = self.path.replace("\n", "").replace("\r", "")[:200]
         log.info(
             "%s %s %d %.1fms client=%s",
-            self.command, self.path, status, duration_ms, client,
+            self.command, safe_path, status, duration_ms, client,
         )
 
     def _check_rate_limit(self) -> bool:
@@ -155,7 +162,7 @@ class BrokerHandler(BaseHTTPRequestHandler):
         if not _API_KEY:
             return True  # no key configured → open access (local use)
         auth = self.headers.get("Authorization", "")
-        if auth == f"Bearer {_API_KEY}":
+        if hmac.compare_digest(auth, f"Bearer {_API_KEY}"):
             return True
         _json_response(self, 401, {"error": "unauthorized"})
         return False
@@ -355,6 +362,11 @@ def serve(host: str = "", port: int = 0) -> None:
     BrokerHandler.engine = engine
 
     server = HTTPServer((host, port), BrokerHandler)
+    if _API_KEY and host in ("0.0.0.0", ""):
+        log.warning(
+            "API key is set but binding to %s without TLS — "
+            "use a reverse proxy with HTTPS in production", host or "0.0.0.0",
+        )
     log.info("Broker server listening on %s:%d", host, port)
     print(f"Broker server listening on http://{host}:{port}")
     print(f"  project={config.project_id}  backends={list(engine._backends.keys())}")
