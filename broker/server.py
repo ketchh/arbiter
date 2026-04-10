@@ -25,6 +25,7 @@ import json
 import logging
 import os
 import sys
+import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Any
 
@@ -61,7 +62,16 @@ class BrokerHandler(BaseHTTPRequestHandler):
     engine: BrokerEngine  # set on the class before serving
 
     def log_message(self, format: str, *args: Any) -> None:
-        log.info(format, *args)
+        # Suppress default BaseHTTPRequestHandler logs — we log ourselves
+        pass
+
+    def _log_request(self, status: int, start: float) -> None:
+        duration_ms = (time.monotonic() - start) * 1000
+        client = self.client_address[0]
+        log.info(
+            "%s %s %d %.1fms client=%s",
+            self.command, self.path, status, duration_ms, client,
+        )
 
     def _check_auth(self) -> bool:
         """Return True if request is authorized. Sends 401 and returns False otherwise."""
@@ -85,6 +95,7 @@ class BrokerHandler(BaseHTTPRequestHandler):
     # -- GET routes -------------------------------------------------------
 
     def do_GET(self) -> None:
+        t0 = time.monotonic()
         if self.path == "/health":
             # Health is always public
             _json_response(self, 200, {
@@ -92,18 +103,23 @@ class BrokerHandler(BaseHTTPRequestHandler):
                 "project_id": self.engine.config.project_id,
                 "backends": list(self.engine._backends.keys()),
             })
+            self._log_request(200, t0)
         else:
             _json_response(self, 404, {"error": "not found"})
+            self._log_request(404, t0)
 
     # -- POST routes ------------------------------------------------------
 
     def do_POST(self) -> None:
+        t0 = time.monotonic()
         if not self._check_auth():
+            self._log_request(401, t0)
             return
         try:
             body = _read_json_body(self)
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             _json_response(self, 400, {"error": "invalid JSON", "detail": str(exc)})
+            self._log_request(400, t0)
             return
 
         if self.path == "/capture":
@@ -116,17 +132,22 @@ class BrokerHandler(BaseHTTPRequestHandler):
             self._handle_upsert(body)
         else:
             _json_response(self, 404, {"error": "not found"})
+        self._log_request(200 if self.path in ("/capture", "/retrieve", "/explain", "/upsert") else 404, t0)
 
     # -- DELETE routes ----------------------------------------------------
 
     def do_DELETE(self) -> None:
+        t0 = time.monotonic()
         if not self._check_auth():
+            self._log_request(401, t0)
             return
         if self.path == "/cache":
             count = self.engine.flush_local_cache()
             _json_response(self, 200, {"flushed": count})
+            self._log_request(200, t0)
         else:
             _json_response(self, 404, {"error": "not found"})
+            self._log_request(404, t0)
 
     # -- handler implementations ------------------------------------------
 
