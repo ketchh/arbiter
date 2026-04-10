@@ -1,0 +1,48 @@
+{
+  "projectId": "sir",
+  "userId": "default-user",
+  "runtime": {
+    "preferredClient": "claude-code",
+    "clientAgnostic": true,
+    "allowDirectClientMemoryWrites": false,
+    "normalizedEventSchemaVersion": 1
+  },
+  "canonicalMemory": "supermemory",
+  "backends": {
+    "supermemory": {
+      "enabled": true,
+      "containerTags": [
+        "user:default-user",
+        "workspace:sir",
+        "project:sir"
+      ]
+    },
+    "ruflo": {
+      "enabled": true,
+      "mode": "cache-and-working-memory"
+    },
+    "localCache": {
+      "enabled": true,
+      "path": "./.broker/cache"
+    }
+  },
+  "policies": {
+    "writeThroughScopes": [
+      "profile",
+      "project",
+      "episodic",
+      "procedural",
+      "governance"
+    ],
+    "cacheDerivedOnlyInRuflo": true,
+    "requireProvenance": true,
+    "allowAutonomousToolEnable": false
+  },
+  "retrieval": {
+    "maxProfileMemories": 8,
+    "maxProjectMemories": 12,
+    "maxEpisodicMemories": 10,
+    "maxProceduralMemories": 10,
+    "maxGovernanceMemories": 5
+  }
+}

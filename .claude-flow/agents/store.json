@@ -1,0 +1,35 @@
+{
+  "agents": {
+    "agent-reviewer": {
+      "agentId": "agent-reviewer",
+      "agentType": "researcher",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 1,
+      "config": {
+        "model": "haiku"
+      },
+      "createdAt": "2026-04-10T01:21:15.090Z",
+      "domain": "code-analysis",
+      "model": "haiku",
+      "modelRoutedBy": "explicit",
+      "currentTask": null
+    },
+    "agent-planner": {
+      "agentId": "agent-planner",
+      "agentType": "implementer",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 1,
+      "config": {
+        "model": "haiku"
+      },
+      "createdAt": "2026-04-10T01:21:15.116Z",
+      "domain": "code-analysis",
+      "model": "haiku",
+      "modelRoutedBy": "explicit",
+      "currentTask": null
+    }
+  },
+  "version": "3.0.0"
+}

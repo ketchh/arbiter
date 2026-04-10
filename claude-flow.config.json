@@ -1,0 +1,45 @@
+{
+  "version": "3.0.0",
+  "memory": {
+    "type": "hybrid",
+    "path": "./.ruflo/data",
+    "maxEntries": 5000,
+    "hnsw": {
+      "m": 16,
+      "ef": 200,
+      "efConstruction": 200
+    }
+  },
+  "swarm": {
+    "topology": "hierarchical",
+    "maxAgents": 6,
+    "strategy": "specialized"
+  },
+  "mcp": {
+    "transport": "stdio",
+    "port": 3000,
+    "host": "localhost"
+  },
+  "security": {
+    "mode": "standard",
+    "inputValidation": true,
+    "pathValidation": true
+  },
+  "hooks": {
+    "enabled": true,
+    "learning": true,
+    "pretrainOnStart": false
+  },
+  "logging": {
+    "level": "info",
+    "format": "json",
+    "destination": "console"
+  },
+  "providers": {
+    "default": "anthropic",
+    "fallback": [
+      "openai",
+      "google"
+    ]
+  }
+}

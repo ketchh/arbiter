@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+
+CLAUDE.local.md
+.claude/settings.local.json
+
+.ruflo/
+.swarm/
+.broker/cache/
+
+node_modules/
+__pycache__/
