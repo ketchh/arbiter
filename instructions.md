@@ -2,7 +2,7 @@
 
 # Continuation Instructions
 
-_Last updated: 2026-04-10 (MCP integration: mcp_resources.py, .mcp.json broker entry, Claude Code hooks wiring docs). Read this file completely before touching anything._
+_Last updated: 2026-04-10 (swarm completed: 16 isolation tests, deployment docs, MCP integration, 54 tests passing). Read this file completely before touching anything._
 
 ---
 
@@ -19,7 +19,7 @@ claude-flow.config.json        ← Ruflo project config
 .gitignore                     ← includes .swarm/, .env, .broker/
 broker/                        ← Python memory broker MVP
 docs/                          ← architecture docs
-tests/                         ← unittest round-trip tests (17 tests, all passing)
+tests/                         ← 54 tests (17 unit + 15 HTTP + 6 hooks + 16 isolation)
 .swarm/                        ← Ruflo runtime data (memory.db, schema.sql, tasks)
 .claude-flow/                  ← Ruflo task store from swarm experiments
 .broker/                       ← local cache backend files (one JSON per scope)
@@ -138,6 +138,7 @@ A swarm with 2 agents (agent-reviewer, agent-planner) ran successfully:
 - ✅ MCP integration docs (`docs/mcp-integration.md`): setup guide, hooks wiring, inline query examples
 - Note: `.claude/settings.json` is protected; broker hook entries must be added manually (see `docs/mcp-integration.md`)
 - ✅ 54 tests passing after changes
+- ✅ Multi-workspace isolation tests (`tests/test_isolation.py`): 16 tests across 5 classes (local cache, ruflo sqlite, supermemory container tags, cross-workspace leakage, same-workspace retrieval)
 
 ---
 
@@ -148,14 +149,10 @@ A swarm with 2 agents (agent-reviewer, agent-planner) ran successfully:
 - Four broker hook commands need to be added manually to settings.json (documented in `docs/mcp-integration.md`).
 - Hooks: PostToolUse (post-edit), SessionStart, SessionEnd, SubagentStop (post-task).
 
-### 2. Multi-workspace isolation testing
-- Test container tags isolation with 2+ workspaces writing to the same Supermemory org.
-- Verify that retrieve scoped by workspace_id returns only matching records.
-
-### 3. VPS deployment
+### 2. VPS live deployment test
 - Dockerfile ready — test with `docker build -t arbiter . && docker run -p 8081:8081 --env-file .env arbiter`.
 - Deployment docs complete in `docs/deployment.md` (Docker, Docker Compose, systemd, PM2, Nginx, security checklist).
-- Remaining: live deployment test on an actual VPS.
+- Remaining: live deployment test on an actual VPS (Docker Desktop not available locally).
 
 ---
 
